@@ -1,0 +1,29 @@
+{
+  "name": "xenon-blade-dash-remix",
+  "version": "1.0.0",
+  "description": "High-octane action game built with Remix SDK and Canvas",
+  "main": "index.html",
+  "scripts": {
+    "dev": "http-server",
+    "build": "echo 'No build required for static game'",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "preview": "http-server"
+  },
+  "keywords": ["game", "action", "canvas", "remix", "blade", "dash"],
+  "author": "Xenon",
+  "license": "AGPL-3.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/xenon231tech/xenon-blade-dash-remix.git"
+  },
+  "bugs": {
+    "url": "https://github.com/xenon231tech/xenon-blade-dash-remix/issues"
+  },
+  "homepage": "https://github.com/xenon231tech/xenon-blade-dash-remix#readme",
+  "devDependencies": {
+    "jest": "^27.0.0",
+    "http-server": "^13.0.0"
+  }
+}

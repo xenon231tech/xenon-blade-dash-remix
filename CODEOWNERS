@@ -1,0 +1,5 @@
+# Code Owners for Blade Dash Remix
+* @xenon231tech
+src/entities/ @xenon231tech
+src/systems/ @xenon231tech
+docs/ @xenon231tech

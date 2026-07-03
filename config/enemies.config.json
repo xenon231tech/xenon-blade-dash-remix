@@ -1,0 +1,1 @@
+{"normal": {"hp": 10, "speed": 100, "damage": 1}, "fast": {"hp": 5, "speed": 200, "damage": 1}, "tank": {"hp": 20, "speed": 50, "damage": 2}}

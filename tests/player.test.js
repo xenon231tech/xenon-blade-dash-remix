@@ -1,10 +1,14 @@
 // Player tests
-describe("Player", () => {
-  test("should take damage", () => {
-    // Test code
+describe('Player', () => {
+  test('takes damage', () => {
+    const player = new Player(0, 0);
+    player.takeDamage(1);
+    expect(player.health).toBe(2);
   });
   
-  test("should heal", () => {
-    // Test code
+  test('dies at 0 health', () => {
+    const player = new Player(0, 0);
+    player.takeDamage(3);
+    expect(player.health).toBe(0);
   });
 });

@@ -1,10 +1,13 @@
 // Game tests
-describe("Game", () => {
-  test("should track score", () => {
-    // Test code
+describe('Game', () => {
+  test('initializes correctly', () => {
+    const game = new Game();
+    expect(game.running).toBe(false);
   });
   
-  test("should progress waves", () => {
-    // Test code
+  test('starts game', () => {
+    const game = new Game();
+    game.start();
+    expect(game.running).toBe(true);
   });
 });

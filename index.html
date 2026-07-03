@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Blade Dash Remix - Action Game</title>
+  <script src="https://cdn.jsdelivr.net/npm/@remix-gg/sdk@latest/dist/index.min.js"></script>
+  <style>
+    html, body {
+      margin: 0; padding: 0; width: 100%; height: 100%;
+      overflow: hidden; background: #0e0a12; touch-action: none;
+      font-family: "Trebuchet MS", system-ui, sans-serif;
+    }
+    canvas { display: block; width: 100vw; height: 100vh; touch-action: none; }
+  </style>
+</head>
+<body>
+  <canvas id="game"></canvas>
+  <script>
+  (() => {
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+    const sdk = window.RemixSDK;
+
+    let vw = window.innerWidth, vh = window.innerHeight;
+    let safe = { top:0, right:0, bottom:0, left:0 };
+    let viewContext = 'feed';
+    let muted = false, audioUnlocked = false;
+    let audioCtx = null, masterGain = null, musicGain = null, sfxGain = null, musicNode = null;
+    let lastTime = 0;
+
+    // ===== GAME STATE MACHINE =====
+    let phase = 'title'; // 'title' | 'waveIntro' | 'playing' | 'paused' | 'upgrading'
+    let waveIntroTimer = 0;
+    const WAVE_INTRO_DUR = 2.5;
+
+    // ===== IMAGES =====
+    function loadImg(src) {
+      const img = new Image(); let loaded = false;
+      img.onload = () => { loaded = true; };
+      img.src = src;
+      return { img, get loaded() { return loaded; } };
+    }
+    const playerImg = loadImg('https://lqy3lriiybxcejon.public.blob.vercel-storage.com/9ec88076-bb14-4029-a916-3bbf52929dca/player-knight-4aOb34bfac68KYUDKWzLE3WiQrNHvC.webp?If1d');
+    const enemyImg = loadImg('https://lqy3lriiybxcejon.public.blob.vercel-storage.com/9ec88076-bb14-4029-a916-3bbf52929dca/enemy-demon-h8Y5i6SUTjj0oS87nCRI8lhGdjurec.webp?Azau');
+
+    const enemyImages = {
+      normal:   loadImg('https://lqy3lriiybxcejon.public.blob.vercel-storage.com/9ec88076-bb14-4029-a916-3bbf52929dca/enemy-normal-red-demon-vXKy.webp?rB6E'),
+      fast:     loadImg('https://lqy3lriiybxcejon.public.blob.vercel-storage.com/9ec88076-bb14-4029-a916-3bbf52929dca/enemy-fast-fire-spirit-wumY.webp?ohJ1'),
+      tank:     loadImg('https://lqy3lriiybxcejon.public.blob.vercel-storage.com/9ec88076-bb14-4029-a916-3bbf52929dca/enemy-tank-golem-Bw7T.webp?06EO'),
+      swarm:    loadImg('https://lqy3lriiybxcejon.public.blob.vercel-storage.com/9ec88076-bb14-4029-a916-3bbf52929dca/enemy-swarm-imp-nxF1.webp?nOza'),
+      shooter:  loadImg('https://lqy3lriiybxcejon.public.blob.vercel-storage.com/9ec88076-bb14-4029-a916-3bbf52929dca/enemy-shooter-ice-mage-xJqW.webp?Ox5w'),
+      teleport: loadImg('https://lqy3lriiybxcejon.public.blob.vercel-storage.com/9ec88076-bb14-4029-a916-3bbf52929dca/enemy-teleport-phantom-TFmZ.webp?T73O'),
+      splitter: loadImg('https://lqy3lriiybxcejon.public.blob.vercel-storage.com/9ec88076-bb14-4029-a916-3bbf52929dca/enemy-splitter-slime-1V47.webp?nUoy'),
+      boss:     loadImg('https://lqy3lriiybxcejon.public.blob.vercel-storage.com/9ec88076-bb14-4029-a916-3bbf52929dca/boss-demon-lord-rZ4r.webp?lZ34')
+    };
+    const bgImg = loadImg('https://lqy3lriiybxcejon.public.blob.vercel-storage.com/9ec88076-bb14-4029-a916-3bbf52929dca/japanese-night-background-FZI8.webp?nwWI');
+    const slashImg = loadImg('https://lqy3lriiybxcejon.public.blob.vercel-storage.com/9ec88076-bb14-4029-a916-3bbf52929dca/slash-effect-Xk9mN2pL.webp');
+    const sparkImg = loadImg('https://lqy3lriiybxcejon.public.blob.vercel-storage.com/9ec88076-bb14-4029-a916-3bbf52929dca/spark-effect-Qw3eR5tY.webp');
+    const impactImg = loadImg('https://lqy3lriiybxcejon.public.blob.vercel-storage.com/9ec88076-bb14-4029-a916-3bbf52929dca/impact-effect-Zx7cV8bN.webp');
+    const dashTrailImg = loadImg('https://lqy3lriiybxcejon.public.blob.vercel-storage.com/9ec88076-bb14-4029-a916-3bbf52929dca/dash-trail-Mn4dF6gH.webp');
+
+    const iconSpeed = loadImg('https://lqy3lriiybxcejon.public.blob.vercel-storage.com/9ec88076-bb14-4029-a916-3bbf52929dca/speed-powerup-icon-kUuE.webp?kmjU');
+    const iconShield = loadImg('https://lqy3lriiybxcejon.public.blob.vercel-storage.com/9ec88076-bb14-4029-a916-3bbf52929dca/shield-powerup-icon-QysF.webp?4EnI');
+    const iconDouble = loadImg('https://lqy3lriiybxcejon.public.blob.vercel-storage.com/9ec88076-bb14-4029-a916-3bbf52929dca/double-score-icon-Uf5z.webp?b4lv');
+    const iconJoystick = loadImg('https://lqy3lriiybxcejon.public.blob.vercel-storage.com/9ec88076-bb14-4029-a916-3bbf52929dca/joystick-move-icon-mQFl.webp?L6L9');
+    const iconDash = loadImg('https://lqy3lriiybxcejon.public.blob.vercel-storage.com/9ec88076-bb14-4029-a916-3bbf52929dca/dash-icon-w7aG.webp?o0tZ');
+    const iconAttack = loadImg('https://lqy3lriiybxcejon.public.blob.vercel-storage.com/9ec88076-bb14-4029-a916-3bbf52929dca/attack-icon-fpev.webp?KaXi');
+    const pauseBtnAsset = loadImg('https://lqy3lriiybxcejon.public.blob.vercel-storage.com/9ec88076-bb14-4029-a916-3bbf52929dca/pause-button-v2-Ab6T.webp?QuIs');
+
+    const joystickAsset = loadImg('https://lqy3lriiybxcejon.public.blob.vercel-storage.com/9ec88076-bb14-4029-a916-3bbf52929dca/joystick-asset-uZiv.webp?Ximh');
+    const dashBtnAsset = loadImg('https://lqy3lriiybxcejon.public.blob.vercel-storage.com/9ec88076-bb14-4029-a916-3bbf52929dca/dash-button-asset-hq9d.webp?5XTD');
+
+    // ===== UPGRADE ICONS =====
+    const upgradeIcons = {
+      vitality: loadImg('https://lqy3lriiybxcejon.public.blob.vercel-storage.com/9ec88076-bb14-4029-a916-3bbf52929dca/upgrade-vitality-icon-Pi6F.webp?5oze'),
+      speed: loadImg('https://lqy3lriiybxcejon.public.blob.vercel-storage.com/9ec88076-bb14-4029-a916-3bbf52929dca/upgrade-speed-icon-9ymB.webp?PdfU'),
+      sharp: loadImg('https://lqy3lriiybxcejon.public.blob.vercel-storage.com/9ec88076-bb14-4029-a916-3bbf52929dca/upgrade-sharp-icon-phaF.webp?qzp8'),
+      wide: loadImg('https://lqy3lriiybxcejon.public.blob.vercel-storage.com/9ec88076-bb14-4029-a916-3bbf52929dca/upgrade-wide-icon-Al67.webp?rXHs'),
+      treasure: loadImg('https://lqy3lriiybxcejon.public.blob.vercel-storage.com/9ec88076-bb14-4029-a916-3bbf52929dca/upgrade-treasure-icon-aE6l.webp?xL68'),
+      quick: loadImg('https://lqy3lriiybxcejon.public.blob.vercel-storage.com/9ec88076-bb14-4029-a916-3bbf52929dca/upgrade-quick-icon-bfg7.webp?Jen8'),
+      barrier: loadImg('https://lqy3lriiybxcejon.public.blob.vercel-storage.com/9ec88076-bb14-4029-a916-3bbf52929dca/upgrade-barrier-icon-0DhJ.webp?9PB7'),
+      heal: loadImg('https://lqy3lriiybxcejon.public.blob.vercel-storage.com/9ec88076-bb14-4029-a916-3bbf52929dca/upgrade-heal-icon-aPYP.webp?tkHV'),
+    };
+
+    // ===== SCORE / HP =====
+    let score = 0, highScore = 0, saveCooldown = 0;
+    let maxHP = 3;
+    let hp = maxHP, hitFlash = 0;
+
+    // ===== COMBO =====
+    let combo = 0, comboTimer = 0, comboMax = 0;
+    const COMBO_WINDOW = 1.8;
+    const COMBO_MULT = [1, 1.5, 2, 3, 5, 8, 13];
+
+    // ===== WAVE SYSTEM =====
+    let waveNumber = 0;
+    let waveEnemiesTotal = 0, waveEnemiesSpawned = 0, waveEnemiesAlive = 0;
+    let waveSpawnTimer = 0, waveSpawnInterval = 0.8;
+    let isBossWave = false, bossRef = null;
+    let bossPhase = 1, bossShootTimer = 0, bossSummonTimer = 0;
+
+    // ===== DASH COOLDOWN =====
+    let dashCooldown = 0;
+    const DASH_CD_MAX = 1.2;
+    let dashCooldownMax = DASH_CD_MAX;
+
+    // ===== UPGRADE SYSTEM =====
+    let upgradeMult = 1.0;
+    let upgradeSpeedBonus = 0;
+    let upgradeSlashDamage = 1;
+    let upgradeSlashRange = 1.0;
+    let upgradeCards = [];
+    const UPGRADE_POOL = [
+      { id:'vitality', name:'Vitality', desc:'+1 Max HP', color:'#ef4444',
+        apply() { maxHP++; hp = Math.min(maxHP, hp+1); } },
+      { id:'speed', name:'Swift Feet', desc:'+15% Speed', color:'#22c55e',
+        apply() { upgradeSpeedBonus += 0.15; } },
+      { id:'sharp', name:'Sharp Blade', desc:'+1 Slash DMG', color:'#f59e0b',
+        apply() { upgradeSlashDamage += 1; } },
+      { id:'wide', name:'Wide Arc', desc:'+25% Range', color:'#06b6d4',
+        apply() { upgradeSlashRange += 0.25; } },
+      { id:'treasure', name:'Treasure Hunter', desc:'+0.5x Score', color:'#eab308',
+        apply() { upgradeMult += 0.5; } },
+      { id:'quick', name:'Quick Dash', desc:'-25% CD', color:'#8b5cf6',
+        apply() { dashCooldownMax = Math.max(0.4, dashCooldownMax * 0.75); } },
+      { id:'barrier', name:'Barrier', desc:'Shield 8s', color:'#3b82f6',
+        apply() { activeFx.shield = 8; } },
+      { id:'heal', name:'Rejuvenate', desc:'Heal 1 HP', color:'#10b981',
+        apply() { hp = Math.min(maxHP, hp+1); } },
+    ];
+
+    // ===== STREAK NOTIFICATIONS =====
+    let streakNotifs = [];
+    let lastStreakLevel = 0;
+
+    // ===== TRANSITION OVERLAY =====
+    let transition = { alpha:0, dir:0, callback:null };
+    function startTransition(cb) { transition.alpha=0; transition.dir=1; transition.callback=cb; }
+    function updateTransition(dt) {
+      if(transition.dir===0) return;
+      transition.alpha += transition.dir * dt * 3;
+      if(transition.alpha>=1 && transition.dir===1) {
+        transition.alpha=1;
+        if(transition.callback) transition.callback();
+        transition.callback=null; transition.dir=-1;
+      }
+      if(transition.alpha<=0 && transition.dir===-1) {
+        transition.alpha=0; transition.dir=0;
+      }
+    }
+
+    const STREAK_THRESHOLDS = [
+      { combo:5,  text:'NICE!',       color:'#60a5fa', size:1.2 },
+      { combo:10, text:'GREAT!',      color:'#f59e0b', size:1.4 },
+      { combo:15, text:'AMAZING!',    color:'#f97316', size:1.5 },
+      { combo:20, text:'UNSTOPPABLE!',color:'#ef4444', size:1.6 },
+      { combo:25, text:'LEGENDARY!',  color:'#a855f7', size:1.7 },
+      { combo:30, text:'GODLIKE!',    color:'#ffd700', size:1.8 },
+    ];
+
+    // ===== GAME LOOP =====
+    function gameLoop(currentTime) {
+      const dt = lastTime ? (currentTime - lastTime) / 1000 : 0;
+      lastTime = currentTime;
+
+      ctx.clearRect(0, 0, vw, vh);
+      
+      // Draw background
+      ctx.fillStyle = '#0e0a12';
+      ctx.fillRect(0, 0, vw, vh);
+
+      // Draw title screen
+      if (phase === 'title') {
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 48px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('BLADE DASH REMIX', vw/2, vh/2 - 50);
+        ctx.font = '24px Arial';
+        ctx.fillText('Tap to Start', vw/2, vh/2 + 50);
+      }
+
+      // Draw playing screen
+      if (phase === 'playing') {
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '20px Arial';
+        ctx.textAlign = 'left';
+        ctx.fillText(`Score: ${score}`, 20, 40);
+        ctx.fillText(`Wave: ${waveNumber}`, 20, 70);
+        ctx.fillText(`HP: ${hp}/${maxHP}`, 20, 100);
+      }
+
+      updateTransition(dt);
+      requestAnimationFrame(gameLoop);
+    }
+
+    // ===== EVENT LISTENERS =====
+    canvas.addEventListener('click', () => {
+      if (phase === 'title') {
+        phase = 'playing';
+        waveNumber = 1;
+      }
+    });
+
+    // Start game loop
+    requestAnimationFrame(gameLoop);
+  })();
+  </script>
+</body>
+</html>

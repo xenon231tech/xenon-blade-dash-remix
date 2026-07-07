@@ -24,6 +24,6 @@
   "homepage": "https://github.com/xenon231tech/xenon-blade-dash-remix#readme",
   "devDependencies": {
     "jest": "^27.0.0",
-    "http-server": "^13.0.0"
+    "http-server": "^14.1.1"
   }
 }
